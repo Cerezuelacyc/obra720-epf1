@@ -222,6 +222,7 @@ function App() {
   const [chatPrecomForm, setChatPrecomForm] = useState({fecha:"",responsable:""});
   const chatEndRef = useRef(null);
   const fileRef = useRef(null);
+  const excelRef = useRef(null);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -280,7 +281,37 @@ function App() {
     setPrecomMode(false);
   }
 
-  function handleImageSelect(e) {
+  function handleExcelSelect(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, {type:"binary"});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, {header:1});
+        // Buscar columna con TAGs: busca celdas que parezcan TAGs (alfanumérico con guión o letras+números)
+        const tags = rows
+          .map(r => r[0])
+          .filter(v => v && typeof v === "string" && v.trim().length >= 2)
+          .map(v => v.trim().toUpperCase())
+          .filter((v, i) => i > 0 || !/^(tag|tags|nombre|name|id)$/i.test(v)); // saltar header si existe
+        if (!tags.length) {
+          setChatMessages(prev=>[...prev,{role:"assistant",text:"No encontré TAGs en la primera columna del Excel."}]);
+          return;
+        }
+        setChatMessages(prev=>[...prev,
+          {role:"user", text:`📊 Excel cargado: ${file.name}`},
+          {role:"assistant", text:`Encontré ${tags.length} TAG(s) en el Excel: ${tags.slice(0,5).join(", ")}${tags.length>5?` y ${tags.length-5} más...`:""}\n\nVoy a preguntarte el estado de cada uno.`}
+        ]);
+        setWizardTags(tags);
+        setTab("chat");
+      } catch(err) {
+        setChatMessages(prev=>[...prev,{role:"assistant",text:`Error al leer el Excel: ${err.message}`}]);
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value="";
+  }
     const file = e.target.files[0]; if (!file) return;
     setImagePreview(URL.createObjectURL(file));
     const reader = new FileReader();
@@ -307,7 +338,14 @@ function App() {
 
     try {
       const res = await fetch("https://tag-tracker-api.cerezuela-cyc.workers.dev/",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:sys,messages:apiMsgs})});
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Worker error:", res.status, errText);
+        setChatMessages(prev=>[...prev,{role:"assistant",text:`Error del servidor (${res.status}): ${errText.slice(0,300)}`}]);
+        setChatLoading(false); return;
+      }
       const data = await res.json();
+      console.log("API response:", JSON.stringify(data).slice(0,500));
       const raw = data.content?.[0]?.text||"";
       if (hasImage) {
         try {
@@ -616,8 +654,8 @@ function App() {
               <button onClick={()=>{setImageData(null);setImagePreview(null);}} style={{background:"none",border:"none",color:"#ff4444",cursor:"pointer",fontSize:16}}>✕</button>
             </div>}
             <div style={{display:"flex",gap:10}}>
-              <input type="file" accept="image/*" ref={fileRef} onChange={handleImageSelect} style={{display:"none"}}/>
-              <button onClick={()=>fileRef.current.click()} className="img-btn" title="Adjuntar imagen">📷</button>
+              <input type="file" accept=".xlsx,.xls" ref={excelRef} onChange={handleExcelSelect} style={{display:"none"}}/>
+              <button onClick={()=>excelRef.current.click()} className="img-btn" title="Cargar Excel" style={{fontSize:16}}>📊</button>
               <input value={chatInput} onChange={e=>setChatInput(e.target.value)} placeholder={imageData?"Instrucciones opcionales...":"¿Cómo está el TAG-A123?..."} disabled={chatLoading} onKeyDown={e=>e.key==="Enter"&&handleChatSend()}/>
               <button onClick={handleChatSend} className="btn btn-primary" disabled={chatLoading||(!chatInput.trim()&&!imageData)} style={{whiteSpace:"nowrap"}}>ENVIAR</button>
             </div>
