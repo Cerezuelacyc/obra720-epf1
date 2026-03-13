@@ -518,18 +518,20 @@ function App() {
         </div>}
 
         {tab==="registro"&&<div className="fade-in">
-          <div style={{marginBottom:20,display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
-            <div>
-              <h2 style={{fontSize:24,fontWeight:700,color:"#e2e8f0",letterSpacing:2}}>BASE DE DATOS</h2>
-              <p style={{fontSize:12,color:"#4a6a5a"}}>// {records.length} registros — sala: {roomCode}</p>
+          <div style={{marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+              <div>
+                <h2 style={{fontSize:24,fontWeight:700,color:"#e2e8f0",letterSpacing:2}}>BASE DE DATOS</h2>
+                <p style={{fontSize:12,color:"#4a6a5a"}}>// {records.length} registros — sala: {roomCode}</p>
+              </div>
             </div>
             <button
               onClick={()=>exportToExcel(records, roomCode)}
               className="btn btn-excel"
               disabled={records.length===0}
-              style={{display:"flex",alignItems:"center",gap:8,opacity:records.length===0?0.4:1}}
+              style={{marginTop:14,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:14,padding:"12px",opacity:records.length===0?0.4:1}}
             >
-              <span style={{fontSize:16}}>📥</span> EXPORTAR EXCEL
+              <span style={{fontSize:18}}>📥</span> DESCARGAR EXCEL
             </button>
           </div>
           <div className="card" style={{padding:0,overflow:"hidden"}}>
