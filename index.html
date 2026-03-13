@@ -298,7 +298,7 @@ function App() {
 
     const dbCtx = records.map(r=>`TAG:${r.tag}|Cal:${r.estado_calidad?"✓":"✗"}|Precom:${r.estado_precomisionado?"✓":"✗"}|Resp:${r.responsable||"N/A"}|${r.estado_calidad&&r.estado_precomisionado?"COMPLETADO":"PENDIENTE"}`).join("\n");
     const sys = hasImage
-      ? `Extrae TAGs de la imagen. Responde SOLO JSON: {"tags":["TAG-A123"]}. Sin TAGs: {"tags":[]}`
+      ? `Eres un extractor de TAGs técnicos de imágenes. Un TAG es un identificador alfanumérico como "TAG-A123", "MCC-01", "PLC-02", "V-101", etc. Analizá la imagen y extraé TODOS los TAGs que veas. Respondé ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones: {"tags":["TAG1","TAG2"]}. Si no hay TAGs, respondé: {"tags":[]}`
       : `Asistente técnico de TAGs.\n${dbCtx}\nTotal:${records.length} Completados:${records.filter(r=>r.estado_calidad&&r.estado_precomisionado).length} Pendientes:${records.filter(r=>!r.estado_calidad||!r.estado_precomisionado).length}\nResponde en español, conciso.`;
 
     const apiMsgs = hasImage
@@ -311,12 +311,29 @@ function App() {
       const raw = data.content?.[0]?.text||"";
       if (hasImage) {
         try {
-          const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
-          const tags = parsed.tags||[];
+          // Limpiar la respuesta de cualquier texto extra
+          let cleaned = raw.replace(/```json|```/g,"").trim();
+          // Buscar el JSON dentro de la respuesta si hay texto extra
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+          if (jsonMatch) cleaned = jsonMatch[0];
+          const parsed = JSON.parse(cleaned);
+          const tags = (parsed.tags||[]).map(t=>t.trim().toUpperCase()).filter(Boolean);
           setImageData(null); setImagePreview(null);
-          if (!tags.length) setChatMessages(prev=>[...prev,{role:"assistant",text:"No encontré TAGs en la imagen."}]);
+          if (!tags.length) setChatMessages(prev=>[...prev,{role:"assistant",text:"No encontré TAGs en la imagen. Asegurate de que la imagen muestre TAGs técnicos claramente visibles."}]);
           else { setChatMessages(prev=>[...prev,{role:"assistant",text:`Encontré ${tags.length} TAG(s): ${tags.join(", ")}.\n\nVoy a preguntarte el estado de cada uno.`}]); setWizardTags(tags); }
-        } catch { setChatMessages(prev=>[...prev,{role:"assistant",text:"No pude interpretar la imagen."}]); }
+        } catch(parseErr) {
+          console.error("Parse error:", parseErr, "Raw response:", raw);
+          // Intentar extraer TAGs manualmente si el JSON falla
+          const tagPattern = /\b([A-Z]{1,5}-?\d{2,6}[A-Z]?)\b/g;
+          const manualTags = [...raw.matchAll(tagPattern)].map(m=>m[1]);
+          setImageData(null); setImagePreview(null);
+          if (manualTags.length) {
+            setChatMessages(prev=>[...prev,{role:"assistant",text:`Encontré ${manualTags.length} TAG(s): ${manualTags.join(", ")}.\n\nVoy a preguntarte el estado de cada uno.`}]);
+            setWizardTags(manualTags);
+          } else {
+            setChatMessages(prev=>[...prev,{role:"assistant",text:`No pude interpretar la respuesta de la IA.\n\nRespuesta recibida: ${raw.slice(0,200)}`}]);
+          }
+        }
       } else setChatMessages(prev=>[...prev,{role:"assistant",text:raw}]);
     } catch { setChatMessages(prev=>[...prev,{role:"assistant",text:"Error de conexión con la IA."}]); }
     setChatLoading(false);
